@@ -1,104 +1,53 @@
 // Dependencies
-var path = require('path');
-var sassLint = require('sass-lint');
 var loaderUtils = require('loader-utils');
 var assign = require('object-assign');
 
-// Helper Utilities
-var formatter = require('./lib/formatter');
+// Modules
+var linter = require('./lib/linter');
 
-/**
- * Linter
- *
- * @param {String|Buffer} input Javascript string
- * @param {Object} config scsslint configuration
- * @param {Object} webpack webpack instance
- * @param {Function} callback optional callback for async loader
- * @return {void}
- */
-function lint(input, options, webpack, callback) {
-  // Run sassLint
-  var report = sassLint.lintText({
-    'text': input,
-    'format': path.extname(webpack.resourcePath).replace('.',  ''),
-    'filename': path.relative(process.cwd(), webpack.resourcePath)
-  }, {}, options.configFile);
+function apply(options, compiler) {
+  // acces to compiler and options
+  compiler.plugin('compilation', function(compilation, params) {
+    // Linter returns a simple report of FilePath + Warning or Errors
+    var report = linter(compiler.context + options.glob, options);
 
-  if (report.messages.length) {
-    
-    if (report.warningCount && options.quiet) {
-      report.warningCount = 0;
-      report.messages = report.messages
-        .filter(function(message) {
-          return message.severity !== 1;
-        });
-    }
+    // Hook into the compilation as early as possible, at the seal step
+    compilation.plugin('seal', function() {
+      // We need to keep the reference to the compilation's scope
+      var _this = this;
 
-    if (report.errorCount || report.warningCount) {
-      var messages = formatter(report.messages, webpack.resourcePath);
-
-      // Default emitter behavior
-      var emitter = report.errorCount ? webpack.emitError : webpack.emitWarning;
-
-      // Force emitError or emitWarning by setting option
-      if (options.emitError) {
-        emitter = webpack.emitError;
-      } else if (options.emitWarning) {
-        emitter = webpack.emitWarning;
-      }
-
-      if (emitter) {
-        emitter(messages);
-        if (options.failOnError && report.errorCount) {
-          throw new Error('Module failed because of a sasslint error.\n' + messages);
-        } else if (options.failOnWarning && report.warningCount) {
-          throw new Error('Module failed because of a sasslint warning.\n' + messages);
+      // Errors/Warnings are pushed to the compilation's error handling
+      // so we can drop out of the processing tree on warn/error
+      report.forEach(function(x) {
+        if(x.error) {
+          _this.errors.push(x.file);
+        } else {
+          _this.warnings.push(x.file);
         }
-      } else {
-        throw new Error(
-          'Your module system doesn\'t support emitWarning.' +
-          'Update available? \n' +
-          messages
-        );
-      }
-    }
-  }
-
-  if (callback) {
-    callback(null, input);
-  }
+      });
+    });
+  });
 }
 
-/**
- * Webpack Loader
- *
- * @param {String|Buffer} input JavaScript string
- * @returns {String|Buffer} original input
- */
-module.exports = function(input) {
-  var options = assign(
-    {
-      configFile: '.scss-lint.yml'
-    },
-    // User defaults
-    this.options.sasslint || {},
-    // loader query string
-    loaderUtils.parseQuery(this.query)
-  );
+// makes it easier to pass and check options to the plugin thank you webpack doc
+// [https://webpack.github.io/docs/plugins.html#the-compiler-instance]
+module.exports = function(options) {
+  options = options || {};
+  // Default Glob is any directory level of scss and/or sass file,
+  // under webpack's context and specificity changed via globbing patterns
+  options.glob = options.glob || '**/*.s?(c|a)ss';
 
-  this.cacheable();
-
-  var callback = this.async();
-
-  if (!callback) { // sync
-    lint(input, options, this);
-
-    return input;
-  } else { // async
-    try {
-      lint(input, options, this, callback);
-    } catch(e) {
-      callback(e);
-    }
+  if (options instanceof Array) {
+    options = {
+      include: options,
+    };
   }
+
+  if (!Array.isArray(options.include)) {
+    options.include = [options.include];
+  }
+
+  return {
+    apply: apply.bind(this, options)
+  };
 };

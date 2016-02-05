@@ -19,8 +19,8 @@ rules:
   property-spelling: 0
   nesting-depth: 0
   shorthand: 0
-  one-declaration-per-line: 1
-  single-line-per-selector: 1
+  one-declaration-per-line: 2
+  single-line-per-selector: 2
   space-after-comma: 1
   # Space surrounding colons
   space-before-colon: 1
