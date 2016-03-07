@@ -1,8 +1,8 @@
+### *Note* This loader is no longer under development, we have switched from a loader to a plugin, please use: [Sasslint Webpack Plugin](https://github.com/alleyinteractive/sasslint-webpack-plugin)
+
 # sasslint-loader
 
 > sasslint loader for webpack
-
-**Note** This loader is under development and does not yet provide line numbers for errors and warnings in SCSS/SASS source files.
 
 ## Install
 
